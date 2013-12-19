@@ -17,99 +17,112 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #------------------------------------------------------------------------------
 __filename__ = "pqdl.py"
-__version__  = "0.0.1"
+__version__  = "0.0.2"
 __author__   = "Albert Simenon"
+__email__		 = "albert@simenon.nl"
 __purpose__  = "Utility to download pocket queries from www.geocaching.com"
-__date__     = "13/12/2013"
+__date__     = "19/12/2013"
 
-import getopt
+import argparse
 import os
 import progressbar
 import sys
 import urllib2
+import re
+import selenium
 
-from selenium import webdriver
+from selenium.webdriver.support.ui import Select
+from datetime import date, timedelta
 
-BASE_URL = "http://www.geocaching.com"
-CHUNK_SIZE = 1024
-USERNAME = ''
-PASSWORD = ''
-OUTPUTDIR = ''
+CHROMEDRIVER = "driver/chromedriver"
+MAX_CACHES_PER_POCKET_QUERY = 950
+MAX_CACHES_LAST_POCKET_QUERY = 500
 
-def gc_login(self):
-	self.get("%s/login" % BASE_URL)
-	self.find_element_by_id("ctl00_ContentBody_tbUsername").send_keys(USERNAME)
-	self.find_element_by_id("ctl00_ContentBody_tbPassword").send_keys(PASSWORD)
-	self.find_element_by_id("ctl00_ContentBody_btnSignIn").click()
+class GCSite:
+	BASE_URL = "http://www.geocaching.com"
+	LOGIN_URL = "%s/login" % (BASE_URL)
+	POCKET_QUERY_URL = "%s/pocket" % (BASE_URL)
+	CHUNK_SIZE = 1024
 
-def download_pq(link,opener):
-	url = link.get_attribute("href")
-	filename = link.get_attribute("text").strip() + ".zip"
+	def __init__(self, driver, args):
+		self.driver = driver
+		self.args = args
 
-	fhandle = opener.open(url)
-	total_size = int(fhandle.info().getheader('Content-Length').strip())
-	pbar = progressbar.ProgressBar(maxval=total_size).start()
-	print filename
-	with open(OUTPUTDIR + filename, 'wb') as foutput:
-		while True:
-			data = fhandle.read(CHUNK_SIZE)
-			if not data:
-				break
-			foutput.write(data)
-			pbar.update(foutput.tell())
-		pbar.finish();
+	def login(self):
+		self.driver.get(self.LOGIN_URL)
+		self.driver.find_element_by_id("ctl00_ContentBody_tbUsername").send_keys(self.args.user)
+		self.driver.find_element_by_id("ctl00_ContentBody_tbPassword").send_keys(self.args.password)
+		self.driver.find_element_by_id("ctl00_ContentBody_btnSignIn").click()
 
-def gc_append_cookies_to_opener(self,opener):
-	cookies = self.get_cookies()
-	for cookie in cookies:
-		opener.addheaders.append(('Cookie', cookie["name"] + "=" + cookie["value"]))
+	def download_pocket_query_by_element(self, element):
+		url = element.get_attribute("href")
+		filename = "%s.zip" % (element.get_attribute("text").strip())
+		
+		opener = urllib2.build_opener()
+		for cookie in self.driver.get_cookies():
+			opener.addheaders.append(('Cookie', cookie["name"] + "=" + cookie["value"]))
 
-def gc_pocket_queries(self):
-	self.get("%s/pocket" % BASE_URL)
-	links = self.find_elements_by_xpath("//a[contains(@href,'downloadpq')]")
+		fhandle = opener.open(url)
+		total_size = int(fhandle.info().getheader('Content-Length').strip())
+		pbar = progressbar.ProgressBar(maxval=total_size).start()
+		print filename
+		with open(self.args.output + filename, 'wb') as foutput:
+			while True:
+				data = fhandle.read(self.CHUNK_SIZE)
+				if not data:
+					break
+				foutput.write(data)
+				pbar.update(foutput.tell())
+			pbar.finish();
+
+	def download_pocket_queries(self):
+		self.driver.get(self.POCKET_QUERY_URL)
+		elements = self.driver.find_elements_by_xpath("//a[contains(@href,'downloadpq')]")
 	
-	opener = urllib2.build_opener()
-	gc_append_cookies_to_opener(self,opener)
-	for link in links:
-		download_pq(link,opener)
+		if elements:
+			for element in elements:
+				self.download_pocket_query_by_element(element)
+		else:
+			print "No pocket queries available to download !"
 
-def parse_cmd_line_options(argv):
-	try:
-		opts,args = getopt.getopt(argv,"hu:p:o:")
-	except getopt.GetOptError:
-		print 'pqdl.py -h for help'
-		sys.exit(2)
-	if not args:
-		print 'pqdl.py -h for help'
-		sys.exit()
-	for opt, arg in opts:
-		if opt == '-h':
-			print 'pqdl.py -h for help'
-			sys.exit()
-		elif opt == '-u':
-			global username
-			username = arg
-		elif opt == '-p':
-			global password
-			password = arg
-		elif opt == '-o':
-			global outputdir 
-			outputdir = arg
+def arg_parser():
+	parser = argparse.ArgumentParser()
+	parser.formatter_class=argparse.RawDescriptionHelpFormatter
+	parser.description = "%s, version %s by %s (%s)\n\n" % (__filename__,__version__,__author__,__email__)
+	parser.description += " %s" % (__purpose__)
 
-def main(argv):
-	parse_cmd_line_options(argv)
-	try:
-		browser = webdriver.Chrome("driver/chromedriver")
-		browser.set_window_size(400,400)
-		gc_login(browser)
-		gc_pocket_queries(browser)
-		browser.quit()
-	except :
-		print(sys.exc_info())
-		raise
+	parser.add_argument("--download", action="store_true", help="download pocket queries")
+	parser.add_argument("--user","-u", required=True, help="Geocaching.com username")
+	parser.add_argument("--password","-p", required=True, help="Geocaching.com password")
+	parser.add_argument("--output","-o", default='', help="output directory")
+
+	args = parser.parse_args()
+
+	return args
+
+	if (args.download,args.create):
+		os.environ["webdriver.chrome.driver"] = CHROMEDRIVER
+		driver = selenium.webdriver.Chrome(CHROMEDRIVER)
+		driver.set_window_size(800,400)
+		if args.download:
+			site = GCSite(driver,args)
+			site.login()
+			site.download_pocket_queries()
+		if args.create:
+			get_pocket_query_ranges(driver)
+		driver.quit()
+
+def main():
+	args = arg_parser()
+
+	if args.download:
+		os.environ["webdriver.chrome.driver"] = CHROMEDRIVER
+		driver = selenium.webdriver.Chrome(CHROMEDRIVER)
+		driver.set_window_size(800,400)
+		site = GCSite(driver,args)
+		site.login()
+		site.download_pocket_queries()
+		driver.quit()
 
 if __name__ == "__main__":
-	print __filename__ , ", version ", __version__, " by ", __author__
-	print __purpose__
-
-	main(sys.argv[1:])
+	main()

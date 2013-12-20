@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-""" Gecoaching.com python utility """
 #------------------------------------------------------------------------------
 # Copyright (C) 2013 Albert Simenon
 #
@@ -17,12 +16,13 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #------------------------------------------------------------------------------
-__filename__ = "pqdl.py"
-__version__  = "0.0.2"
+""" Gecoaching.com python utility """
+__filename__ = "gc_util.py"
+__version__  = "0.0.3"
 __author__   = "Albert Simenon"
 __email__    = "albert@simenon.nl"
 __purpose__  = "Utility to download pocket queries from www.geocaching.com"
-__date__     = "19/12/2013"
+__date__     = "20/12/2013"
 
 import argparse
 import os
@@ -34,6 +34,7 @@ from selenium import webdriver
 CHROMEDRIVER = "driver/chromedriver"
 MAX_CACHES_PER_POCKET_QUERY = 950
 MAX_CACHES_LAST_POCKET_QUERY = 500
+BROWSERS = ["phantomjs","chrome","firefox","iexplorer"]
 
 class GCSite:
     """ Geocaching.com web browser class """
@@ -99,6 +100,11 @@ def arg_parser():
         % (__filename__,__version__,__author__,__email__,__purpose__)
   
     parser.add_argument(
+        "--browser","-b",
+        choices=BROWSERS,
+        default=BROWSERS[0],
+        help="browser used for visiting geocaching.com")
+    parser.add_argument(
          "--download", 
          action="store_true", 
          help="download pocket queries")
@@ -112,7 +118,7 @@ def arg_parser():
          help="Geocaching.com password")
     parser.add_argument(
          "--output","-o", 
-         default='', 
+         default="", 
          help="output directory")
   
     args = parser.parse_args()
@@ -123,9 +129,22 @@ def main():
     """ Obviously the main routine """
     args = arg_parser()
 
+    if args.browser == BROWSERS[0]:
+        driver = webdriver.PhantomJS()
+    elif args.browser == BROWSERS[1]:
+        driver = webdriver.Chrome()
+#        driver = webdriver.Chrome(CHROMEDRIVER)
+    elif args.browser == BROWSERS[2]:
+        driver = webdriver.Firefox()
+    elif args.browser == BROWSERS[3]:
+        driver = webdriver.Ie()
+
     if args.download:
-        os.environ["webdriver.chrome.driver"] = CHROMEDRIVER
-        driver = webdriver.Chrome(CHROMEDRIVER)
+#        os.environ["webdriver.chrome.driver"] = CHROMEDRIVER
+#        driver = webdriver.Chrome(CHROMEDRIVER)
+#        driver = webdriver.PhantomJS()
+#        driver = webdriver.Remote("http://localhost:4444/wd/hub", webdriver.DesiredCapabilities.HTMLUNIT)
+#        driver = webdriver.HtmlUnitDriver()
         driver.set_window_size(800, 400)
         site = GCSite(driver, args)
         site.login()

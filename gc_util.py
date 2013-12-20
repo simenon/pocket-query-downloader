@@ -30,6 +30,7 @@ import progressbar
 import urllib2
 
 from selenium import webdriver
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 
 CHROMEDRIVER = "driver/chromedriver"
 MAX_CACHES_PER_POCKET_QUERY = 950
@@ -64,9 +65,13 @@ class GCSite:
         filename = "%s.zip" % (element.get_attribute("text").strip())
        
         opener = urllib2.build_opener()
-        for cookie in self.driver.get_cookies():
+        cookies = self.driver.get_cookies()
+        if cookies:
+            cookiestring = ''
+            for cookie in cookies:
+                cookiestring += "%s=%s;" % (cookie["name"], cookie["value"])
             opener.addheaders.append(
-                ('Cookie', cookie["name"] + "=" + cookie["value"]))
+                ('Cookie', cookiestring))
 
         fhandle = opener.open(url)
         total_size = int(fhandle.info().getheader('Content-Length').strip())
@@ -130,22 +135,24 @@ def main():
     args = arg_parser()
 
     if args.browser == BROWSERS[0]:
-        driver = webdriver.PhantomJS()
+        user_agent = (
+            "Mozilla/5.0 (X11; Linux x86_64) " +
+            "AppleWebKit/537.36 (KHTML, like Gecko) " +
+            "Chrome/31.0.1650.63 Safari/537.36")
+
+        dcap = dict(DesiredCapabilities.PHANTOMJS)
+        dcap["phantomjs.page.settings.userAgent"] = user_agent
+
+        driver = webdriver.PhantomJS(desired_capabilities=dcap)       
     elif args.browser == BROWSERS[1]:
         driver = webdriver.Chrome()
-#        driver = webdriver.Chrome(CHROMEDRIVER)
+        driver.set_window_size(800, 400)
     elif args.browser == BROWSERS[2]:
         driver = webdriver.Firefox()
     elif args.browser == BROWSERS[3]:
         driver = webdriver.Ie()
 
     if args.download:
-#        os.environ["webdriver.chrome.driver"] = CHROMEDRIVER
-#        driver = webdriver.Chrome(CHROMEDRIVER)
-#        driver = webdriver.PhantomJS()
-#        driver = webdriver.Remote("http://localhost:4444/wd/hub", webdriver.DesiredCapabilities.HTMLUNIT)
-#        driver = webdriver.HtmlUnitDriver()
-        driver.set_window_size(800, 400)
         site = GCSite(driver, args)
         site.login()
         site.download_pocket_queries()
